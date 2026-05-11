@@ -2,8 +2,21 @@ const { getRequiredEnv } = require("./config");
 
 function getSupabaseConfig() {
   const env = getRequiredEnv(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
+  const url = env.SUPABASE_URL.trim().replace(/\/+$/, "");
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
+    const error = new Error("SUPABASE_URL must be your Supabase Project URL, like https://your-project-ref.supabase.co.");
+    error.statusCode = 500;
+    error.missing = ["SUPABASE_URL"];
+    throw error;
+  }
+  if (env.SUPABASE_SERVICE_ROLE_KEY.includes("<") || env.SUPABASE_SERVICE_ROLE_KEY.includes("from-supabase")) {
+    const error = new Error("SUPABASE_SERVICE_ROLE_KEY must be the real Supabase service role key, not placeholder text.");
+    error.statusCode = 500;
+    error.missing = ["SUPABASE_SERVICE_ROLE_KEY"];
+    throw error;
+  }
   return {
-    url: env.SUPABASE_URL.replace(/\/+$/, ""),
+    url,
     key: env.SUPABASE_SERVICE_ROLE_KEY
   };
 }
