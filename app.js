@@ -62,26 +62,26 @@ const seedBaseline = {
   avgRecentHr: 176,
   avgRecentTrainingEffect: 4.9,
   recentPeakWeek: 29.96,
-  latestActivity: "May 2 treadmill run, 3.31 mi",
-  sourceNote: "Seeded from your Garmin CSV. Import a new CSV to refresh this baseline.",
+  latestActivity: "May 11 strength, 1:02:05",
+  sourceNote: "Run baseline is seeded from your Garmin CSV. Last session is seeded from your latest Garmin FIT strength file.",
   lastSession: {
-    source: "Garmin seed",
-    date: "2026-05-02T07:56:35",
-    title: "Treadmill Running",
-    sport: "Treadmill Running",
-    distanceMiles: 3.31,
-    durationSeconds: 2104,
-    movingTimeSeconds: 1923,
-    elapsedTimeSeconds: 2104,
-    avgHr: 167,
-    maxHr: 183,
-    aerobicTe: 4.6,
-    avgPace: "10:36",
-    bestPace: "8:57",
-    calories: 569,
-    avgCadence: 162,
-    steps: 5676,
-    notes: "Imported from your Garmin baseline."
+    source: "Garmin FIT",
+    date: "2026-05-11T12:20:20-05:00",
+    title: "Strength",
+    sport: "Strength training",
+    durationSeconds: 3725,
+    movingTimeSeconds: 3725,
+    elapsedTimeSeconds: 3725,
+    calories: 456,
+    avgHr: 113,
+    maxHr: 166,
+    aerobicTe: 2.1,
+    activeSets: 25,
+    setRecords: 50,
+    totalReps: 276,
+    activeDurationSeconds: 959,
+    restDurationSeconds: 2766,
+    notes: "Decoded from Garmin FIT file 22846234707_ACTIVITY.fit."
   }
 };
 
@@ -119,7 +119,7 @@ let coachProfile = loadCoachProfile();
 let coachMessages = loadCoachMessages();
 let workoutOverrides = loadJson("formedWorkoutOverrides", {});
 let completedWorkouts = new Set(loadJson("formedCompletedWorkouts", []));
-let lastSession = loadJson("formedLastSession", seedBaseline.lastSession);
+let lastSession = loadInitialLastSession();
 
 const els = {
   appBrand: document.querySelector("#appBrand"),
@@ -194,6 +194,19 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function sessionTimestamp(session) {
+  const timestamp = new Date(session?.date || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function loadInitialLastSession() {
+  const stored = loadJson("formedLastSession", null);
+  if (!stored) return seedBaseline.lastSession;
+  return sessionTimestamp(seedBaseline.lastSession) > sessionTimestamp(stored)
+    ? seedBaseline.lastSession
+    : stored;
 }
 
 function apiUrl(path) {
@@ -765,6 +778,11 @@ function sessionMetricRows(session) {
     [session.durationSeconds ? formatSeconds(session.durationSeconds) : session.durationMinutes ? `${session.durationMinutes} min` : null, "time"],
     [session.movingTimeSeconds ? formatSeconds(session.movingTimeSeconds) : null, "moving time"],
     [session.elapsedTimeSeconds ? formatSeconds(session.elapsedTimeSeconds) : null, "elapsed time"],
+    [session.activeSets ? compactNumber(session.activeSets, 0) : null, "active sets"],
+    [session.setRecords ? compactNumber(session.setRecords, 0) : null, "set records"],
+    [session.totalReps ? compactNumber(session.totalReps, 0) : null, "reps"],
+    [session.activeDurationSeconds ? formatSeconds(session.activeDurationSeconds) : null, "active time"],
+    [session.restDurationSeconds ? formatSeconds(session.restDurationSeconds) : null, "rest time"],
     [session.avgPace ? `${session.avgPace}/mi` : null, "avg pace"],
     [session.bestPace ? `${session.bestPace}/mi` : null, "best pace"],
     [session.avgSpeedMph ? `${compactNumber(session.avgSpeedMph, 1)} mph` : null, "avg speed"],
