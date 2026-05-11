@@ -3,6 +3,7 @@ const DEFAULT_TODAY = "2026-05-11";
 const APP_NAME = "Formed";
 const DEFAULT_COACH_NAME = "Elias";
 const TIMEZONE = "America/Chicago";
+const DEPLOYED_APP_URL = "https://formed-amber.vercel.app";
 const CALENDAR_DEFAULTS = {
   weekdayStart: "05:30",
   weekdayDoneBy: "07:00",
@@ -148,7 +149,9 @@ const els = {
   lastSessionSource: document.querySelector("#lastSessionSource"),
   lastSessionBody: document.querySelector("#lastSessionBody"),
   dataNote: document.querySelector("#dataNote"),
+  stravaConnectLink: document.querySelector("#stravaConnectLink"),
   syncButton: document.querySelector("#syncButton"),
+  resetSyncTokenButton: document.querySelector("#resetSyncTokenButton"),
   syncStatus: document.querySelector("#syncStatus"),
   coachNameInput: document.querySelector("#coachNameInput"),
   saveCoachButton: document.querySelector("#saveCoachButton"),
@@ -191,6 +194,10 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function apiUrl(path) {
+  return location.protocol === "file:" ? `${DEPLOYED_APP_URL}${path}` : path;
 }
 
 function escapeHtml(value) {
@@ -1445,7 +1452,7 @@ function serverActivityToLastSession(activity) {
 async function fetchLatestSession(token, { silent = false } = {}) {
   if (!token) return;
   try {
-    const response = await fetch(`/api/activities/latest?token=${encodeURIComponent(token)}`);
+    const response = await fetch(apiUrl(`/api/activities/latest?token=${encodeURIComponent(token)}`));
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Latest activity unavailable.");
     const session = serverActivityToLastSession(payload.activity);
@@ -1457,6 +1464,14 @@ async function fetchLatestSession(token, { silent = false } = {}) {
     if (!silent && els.syncStatus) {
       els.syncStatus.textContent = `${error.message} Sync Strava again after Supabase is configured.`;
     }
+  }
+}
+
+function resetSyncToken() {
+  localStorage.removeItem("formedSyncToken");
+  if (els.syncStatus) {
+    els.syncStatus.dataset.touched = "true";
+    els.syncStatus.textContent = "Saved sync token cleared. Click Sync now and paste the CALENDAR_TOKEN from Vercel.";
   }
 }
 
@@ -1473,9 +1488,12 @@ async function syncStravaActivities() {
   }
   els.syncStatus.textContent = "Requesting Strava sync...";
   try {
-    const response = await fetch(`/api/strava/sync?token=${encodeURIComponent(token)}`);
+    const response = await fetch(apiUrl(`/api/strava/sync?token=${encodeURIComponent(token)}`));
     const payload = await response.json();
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem("formedSyncToken");
+      }
       throw new Error(payload.error || "Sync is not configured yet.");
     }
     const session = serverActivityToLastSession(payload.latest_activity);
@@ -1483,7 +1501,8 @@ async function syncStravaActivities() {
     els.syncStatus.textContent = `Synced ${payload.synced} Strava activities. ${coachProfile.coachName || DEFAULT_COACH_NAME} can now use the latest completions in the calendar feed and next plan refresh.`;
     renderLastSession();
   } catch (error) {
-    els.syncStatus.textContent = `${error.message} Deploy the MVP and set the server secrets to activate this button.`;
+    els.syncStatus.dataset.touched = "true";
+    els.syncStatus.textContent = `${error.message} If you mistyped the token, I cleared the saved value; click Sync now and paste the CALENDAR_TOKEN from Vercel.`;
   }
 }
 
@@ -1520,6 +1539,7 @@ function bindEvents() {
   els.exportButton.addEventListener("click", exportWeekCsv);
   els.icalButton.addEventListener("click", exportWeekIcs);
   els.syncButton.addEventListener("click", syncStravaActivities);
+  els.resetSyncTokenButton.addEventListener("click", resetSyncToken);
   els.saveCoachButton.addEventListener("click", saveCoachProfile);
   els.coachNameInput.addEventListener("change", saveCoachProfile);
   els.askCoachButton.addEventListener("click", askCoach);
@@ -1532,6 +1552,7 @@ function bindEvents() {
 function init() {
   els.todayInput.value = DEFAULT_TODAY;
   els.coachNameInput.value = coachProfile.coachName || DEFAULT_COACH_NAME;
+  els.stravaConnectLink.href = apiUrl("/api/strava/connect");
   buildAvailabilityControls();
   renderStrengthMenu();
   bindEvents();
