@@ -1,6 +1,7 @@
 const { handleError, json, requireFeedToken } = require("../_lib/config");
 const { select, upsert } = require("../_lib/supabase");
 const { refreshAccessToken, getAthleteActivities } = require("../_lib/strava");
+const { summarizeActivity } = require("../_lib/activity-summary");
 
 async function getStoredToken() {
   const athleteQuery = process.env.ATHLETE_ID
@@ -63,7 +64,8 @@ module.exports = async function handler(req, res) {
     json(res, 200, {
       synced: records.length,
       athlete_id: token.athlete_id,
-      newest_activity: records[0]?.start_date || null
+      newest_activity: records[0]?.start_date || null,
+      latest_activity: summarizeActivity([...records].sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0])
     });
   } catch (error) {
     handleError(res, error);

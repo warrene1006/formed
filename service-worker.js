@@ -1,4 +1,4 @@
-const CACHE_NAME = "formed-v2";
+const CACHE_NAME = "formed-v3";
 const ASSETS = [
   "./",
   "./index.html",

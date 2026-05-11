@@ -62,7 +62,26 @@ const seedBaseline = {
   avgRecentTrainingEffect: 4.9,
   recentPeakWeek: 29.96,
   latestActivity: "May 2 treadmill run, 3.31 mi",
-  sourceNote: "Seeded from your Garmin CSV. Import a new CSV to refresh this baseline."
+  sourceNote: "Seeded from your Garmin CSV. Import a new CSV to refresh this baseline.",
+  lastSession: {
+    source: "Garmin seed",
+    date: "2026-05-02T07:56:35",
+    title: "Treadmill Running",
+    sport: "Treadmill Running",
+    distanceMiles: 3.31,
+    durationSeconds: 2104,
+    movingTimeSeconds: 1923,
+    elapsedTimeSeconds: 2104,
+    avgHr: 167,
+    maxHr: 183,
+    aerobicTe: 4.6,
+    avgPace: "10:36",
+    bestPace: "8:57",
+    calories: 569,
+    avgCadence: 162,
+    steps: 5676,
+    notes: "Imported from your Garmin baseline."
+  }
 };
 
 const availabilityDefaults = {
@@ -99,6 +118,7 @@ let coachProfile = loadCoachProfile();
 let coachMessages = loadCoachMessages();
 let workoutOverrides = loadJson("formedWorkoutOverrides", {});
 let completedWorkouts = new Set(loadJson("formedCompletedWorkouts", []));
+let lastSession = loadJson("formedLastSession", seedBaseline.lastSession);
 
 const els = {
   appBrand: document.querySelector("#appBrand"),
@@ -125,6 +145,8 @@ const els = {
   dailyCallout: document.querySelector("#dailyCallout"),
   miniActions: document.querySelector("#miniActions"),
   baselineGrid: document.querySelector("#baselineGrid"),
+  lastSessionSource: document.querySelector("#lastSessionSource"),
+  lastSessionBody: document.querySelector("#lastSessionBody"),
   dataNote: document.querySelector("#dataNote"),
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
@@ -169,6 +191,25 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
+function saveLastSession(session) {
+  if (!session) return;
+  lastSession = {
+    updatedAt: new Date().toISOString(),
+    ...session
+  };
+  saveJson("formedLastSession", lastSession);
 }
 
 function loadCoachProfile() {
@@ -681,6 +722,93 @@ function applyWorkoutOverrides(week) {
   });
 }
 
+function formatSeconds(totalSeconds) {
+  const seconds = Number(totalSeconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const rounded = Math.round(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const remainder = rounded % 60;
+  if (hours) return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatSessionDate(value) {
+  if (!value) return "Date unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unknown";
+  return `${formatDate(date, { month: "short", day: "numeric", year: "numeric" })} at ${date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit"
+  })}`;
+}
+
+function compactNumber(value, digits = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number.toLocaleString("en-US", {
+    maximumFractionDigits: digits
+  });
+}
+
+function sessionMetricRows(session) {
+  return [
+    [session.sport, "type"],
+    [session.distanceMiles != null ? `${compactNumber(session.distanceMiles, 2)} mi` : null, "distance"],
+    [session.durationSeconds ? formatSeconds(session.durationSeconds) : session.durationMinutes ? `${session.durationMinutes} min` : null, "time"],
+    [session.movingTimeSeconds ? formatSeconds(session.movingTimeSeconds) : null, "moving time"],
+    [session.elapsedTimeSeconds ? formatSeconds(session.elapsedTimeSeconds) : null, "elapsed time"],
+    [session.avgPace ? `${session.avgPace}/mi` : null, "avg pace"],
+    [session.bestPace ? `${session.bestPace}/mi` : null, "best pace"],
+    [session.avgSpeedMph ? `${compactNumber(session.avgSpeedMph, 1)} mph` : null, "avg speed"],
+    [session.avgHr ? `${Math.round(session.avgHr)} bpm` : null, "avg HR"],
+    [session.maxHr ? `${Math.round(session.maxHr)} bpm` : null, "max HR"],
+    [session.aerobicTe != null ? compactNumber(session.aerobicTe, 1) : null, "aerobic TE"],
+    [session.calories ? compactNumber(session.calories, 0) : null, "calories"],
+    [session.avgCadence ? `${Math.round(session.avgCadence)} spm` : null, "avg cadence"],
+    [session.maxCadence ? `${Math.round(session.maxCadence)} spm` : null, "max cadence"],
+    [session.steps ? compactNumber(session.steps, 0) : null, "steps"],
+    [session.ascent ? `${compactNumber(session.ascent, 0)} ft` : null, "ascent"],
+    [session.descent ? `${compactNumber(session.descent, 0)} ft` : null, "descent"],
+    [session.strideLength ? `${compactNumber(session.strideLength, 2)} m` : null, "stride"],
+    [session.avgWatts ? `${Math.round(session.avgWatts)} W` : null, "avg power"],
+    [session.intensity, "planned intensity"],
+    [session.available ? `${session.available} min` : null, "available"],
+    [session.rpe ? `${session.rpe}/10` : null, "RPE"],
+    [session.feeling, "feel"]
+  ].filter(([value]) => value != null && value !== "");
+}
+
+function renderLastSession() {
+  if (!els.lastSessionBody) return;
+  const session = lastSession || seedBaseline.lastSession;
+  if (!session) {
+    els.lastSessionSource.textContent = "No data";
+    els.lastSessionBody.innerHTML = `
+      <div class="last-session-note">Import a Garmin CSV, sync Strava, or complete a Formed workout to fill this in.</div>
+    `;
+    return;
+  }
+
+  els.lastSessionSource.textContent = session.source || "Session";
+  const notes = [session.intent, session.notes, session.adaptationNote].filter(Boolean).join(" ");
+  els.lastSessionBody.innerHTML = `
+    <div class="last-session-title">
+      <strong>${escapeHtml(session.title || "Training session")}</strong>
+      <span>${escapeHtml(formatSessionDate(session.date))}</span>
+    </div>
+    <div class="last-session-stats">
+      ${sessionMetricRows(session).map(([value, label]) => `
+        <div class="last-session-stat">
+          <strong>${escapeHtml(value)}</strong>
+          <span>${escapeHtml(label)}</span>
+        </div>
+      `).join("")}
+    </div>
+    ${notes ? `<div class="last-session-note">${escapeHtml(notes)}</div>` : ""}
+  `;
+}
+
 function renderBaseline() {
   const weeklyAverage = Math.round((baseline.last4RunMiles ?? 0) / 4 * 10) / 10;
   const metrics = [
@@ -824,15 +952,55 @@ function parseDuration(value) {
   return 0;
 }
 
+function csvActivityToLastSession(activity) {
+  if (!activity) return null;
+  return {
+    source: "Garmin CSV",
+    date: activity.date?.toISOString(),
+    title: activity.title || activity.type || "Training session",
+    sport: activity.type || "Training",
+    distanceMiles: activity.distance,
+    durationSeconds: activity.seconds,
+    movingTimeSeconds: activity.movingSeconds,
+    elapsedTimeSeconds: activity.elapsedSeconds,
+    avgHr: activity.avgHr,
+    maxHr: activity.maxHr,
+    aerobicTe: activity.trainingEffect,
+    avgPace: activity.avgPace,
+    bestPace: activity.bestPace,
+    calories: activity.calories,
+    avgCadence: activity.avgCadence,
+    maxCadence: activity.maxCadence,
+    ascent: activity.ascent,
+    descent: activity.descent,
+    strideLength: activity.strideLength,
+    steps: activity.steps,
+    notes: "Imported from Garmin CSV."
+  };
+}
+
 function summarizeActivities(rows) {
   const activities = rows
     .map((row) => ({
       type: row["Activity Type"] ?? "",
+      title: row.Title || row["Activity Type"] || "Training session",
       date: row.Date ? new Date(row.Date.replace(" ", "T")) : null,
       distance: parseNumber(row.Distance),
       seconds: parseDuration(row.Time),
+      movingSeconds: parseDuration(row["Moving Time"]),
+      elapsedSeconds: parseDuration(row["Elapsed Time"]),
+      calories: parseNumber(row.Calories),
       avgHr: parseNumber(row["Avg HR"]),
-      trainingEffect: parseNumber(row["Aerobic TE"])
+      maxHr: parseNumber(row["Max HR"]),
+      trainingEffect: parseNumber(row["Aerobic TE"]),
+      avgCadence: parseNumber(row["Avg Run Cadence"]),
+      maxCadence: parseNumber(row["Max Run Cadence"]),
+      avgPace: row["Avg Pace"] && row["Avg Pace"] !== "--" ? row["Avg Pace"] : null,
+      bestPace: row["Best Pace"] && row["Best Pace"] !== "--" ? row["Best Pace"] : null,
+      ascent: parseNumber(row["Total Ascent"]),
+      descent: parseNumber(row["Total Descent"]),
+      strideLength: parseNumber(row["Avg Stride Length"]),
+      steps: parseNumber(row.Steps)
     }))
     .filter((activity) => activity.date && !Number.isNaN(activity.date.getTime()));
 
@@ -876,6 +1044,7 @@ function summarizeActivities(rows) {
     avgRecentTrainingEffect: average("trainingEffect", recentRuns),
     recentPeakWeek: Math.round(Math.max(0, ...weekly.values()) * 100) / 100,
     latestActivity: latest ? `${formatDate(latest.date)} ${latest.type}, ${latest.distance ?? "--"} mi` : "No activity",
+    lastSession: csvActivityToLastSession(latest),
     sourceNote: "Imported in this browser session. Future HealthKit, Strava, and Garmin sync can feed this same baseline."
   };
 }
@@ -1073,6 +1242,7 @@ function render() {
   renderWorkoutSelect();
   renderDailyCallout(today, currentWeek, readiness, phase);
   renderBaseline();
+  renderLastSession();
   renderCoachConversation();
   renderTimeline(today);
 }
@@ -1233,9 +1403,61 @@ async function completeWorkoutWithFeedback() {
   coachMessages.push({ role: "user", text: `Completed ${workout.title}. RPE ${feedback.rpe}. Felt ${feedback.feeling}. ${feedback.notes}`.trim() });
   coachMessages.push({ role: "coach", text: result.message });
   saveJson("formedCoachMessages", coachMessages);
+  saveLastSession({
+    source: "Formed feedback",
+    date: workout.date.toISOString(),
+    title: workout.title,
+    sport: workout.sport,
+    durationMinutes: workout.duration,
+    intensity: workout.intensity,
+    available: workout.available,
+    intent: workout.intent,
+    rpe: feedback.rpe,
+    feeling: feedback.feeling,
+    notes: feedback.notes || "Completed from the generated plan.",
+    adaptationNote: result.message
+  });
   els.feedbackResponse.textContent = result.message;
   els.feedbackNotesInput.value = "";
   render();
+}
+
+function serverActivityToLastSession(activity) {
+  if (!activity) return null;
+  return {
+    source: activity.source || "Strava",
+    date: activity.date || activity.start_date,
+    title: activity.title || activity.name || "Training session",
+    sport: activity.sport || activity.type || activity.sport_type || "Training",
+    distanceMiles: activity.distanceMiles,
+    durationSeconds: activity.durationSeconds,
+    movingTimeSeconds: activity.movingTimeSeconds,
+    elapsedTimeSeconds: activity.elapsedTimeSeconds,
+    avgHr: activity.avgHr,
+    maxHr: activity.maxHr,
+    avgWatts: activity.avgWatts,
+    avgPace: activity.avgPace,
+    avgSpeedMph: activity.avgSpeedMph,
+    notes: activity.notes || "Synced from Strava."
+  };
+}
+
+async function fetchLatestSession(token, { silent = false } = {}) {
+  if (!token) return;
+  try {
+    const response = await fetch(`/api/activities/latest?token=${encodeURIComponent(token)}`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Latest activity unavailable.");
+    const session = serverActivityToLastSession(payload.activity);
+    if (session) {
+      saveLastSession(session);
+      renderLastSession();
+    }
+  } catch (error) {
+    if (!silent && els.syncStatus) {
+      els.syncStatus.textContent = `${error.message} Sync Strava again after Supabase is configured.`;
+    }
+  }
 }
 
 async function syncStravaActivities() {
@@ -1256,7 +1478,10 @@ async function syncStravaActivities() {
     if (!response.ok) {
       throw new Error(payload.error || "Sync is not configured yet.");
     }
+    const session = serverActivityToLastSession(payload.latest_activity);
+    if (session) saveLastSession(session);
     els.syncStatus.textContent = `Synced ${payload.synced} Strava activities. ${coachProfile.coachName || DEFAULT_COACH_NAME} can now use the latest completions in the calendar feed and next plan refresh.`;
+    renderLastSession();
   } catch (error) {
     els.syncStatus.textContent = `${error.message} Deploy the MVP and set the server secrets to activate this button.`;
   }
@@ -1288,6 +1513,7 @@ function bindEvents() {
     if (!file) return;
     const text = await file.text();
     baseline = summarizeActivities(parseCsv(text));
+    if (baseline.lastSession) saveLastSession(baseline.lastSession);
     render();
   });
 
@@ -1314,6 +1540,8 @@ function init() {
   if (new URLSearchParams(location.search).get("strava") === "connected" && els.syncStatus) {
     els.syncStatus.textContent = "Strava connected. Use Sync now after your private token is set.";
   }
+
+  fetchLatestSession(localStorage.getItem("formedSyncToken"), { silent: true });
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {});

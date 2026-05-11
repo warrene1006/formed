@@ -218,6 +218,7 @@ button {
 }
 
 .data-panel,
+.last-session-panel,
 .coach-panel,
 .feedback-panel,
 .strength-panel {
@@ -350,6 +351,71 @@ output {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.last-session-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.last-session-title {
+  display: grid;
+  gap: 5px;
+}
+
+.last-session-title strong {
+  color: var(--ink);
+  font-size: 1.12rem;
+  line-height: 1.2;
+}
+
+.last-session-title span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.last-session-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.last-session-stat {
+  min-height: 66px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-strong);
+}
+
+.last-session-stat strong,
+.last-session-stat span {
+  display: block;
+}
+
+.last-session-stat strong {
+  color: var(--green);
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.last-session-stat span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.last-session-note {
+  border-left: 3px solid var(--amber);
+  padding: 10px 12px;
+  background: rgba(255, 159, 28, 0.075);
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .availability-grid {
@@ -716,6 +782,7 @@ output {
   .controls-panel,
   .today-panel,
   .data-panel,
+  .last-session-panel,
   .coach-panel,
   .feedback-panel,
   .strength-panel {
@@ -754,6 +821,7 @@ output {
   .controls-panel,
   .today-panel,
   .data-panel,
+  .last-session-panel,
   .coach-panel,
   .feedback-panel,
   .strength-panel,
@@ -767,6 +835,7 @@ output {
   .control-grid,
   .metric-strip,
   .baseline-grid,
+  .last-session-stats,
   .mini-actions {
     grid-template-columns: 1fr;
   }
