@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#070907">
+    <title>Formed</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="appBrand">Formed</p>
+          <h1 id="heroTitle">Wellness coaching that bends around real life.</h1>
+        </div>
+        <div class="event-countdown" id="eventCountdown"></div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel controls-panel" aria-labelledby="controlsTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Today</p>
+              <h2 id="controlsTitle">Readiness</h2>
+            </div>
+            <span class="status-pill" id="readinessPill">Ready</span>
+          </div>
+
+          <div class="control-grid">
+            <label>
+              Date
+              <input id="todayInput" type="date">
+            </label>
+            <label>
+              Sleep
+              <select id="sleepInput">
+                <option value="great">Great</option>
+                <option value="ok" selected>Okay</option>
+                <option value="poor">Poor</option>
+              </select>
+            </label>
+            <label>
+              HRV trend
+              <select id="hrvInput">
+                <option value="up">Up</option>
+                <option value="flat" selected>Flat</option>
+                <option value="down">Down</option>
+              </select>
+            </label>
+            <label>
+              Resting HR
+              <select id="rhrInput">
+                <option value="normal" selected>Normal</option>
+                <option value="plus4">+4 bpm</option>
+                <option value="plus8">+8 bpm</option>
+              </select>
+            </label>
+            <label>
+              Soreness
+              <input id="sorenessInput" type="range" min="0" max="10" value="3">
+              <output id="sorenessOutput">3</output>
+            </label>
+            <label>
+              Life load
+              <input id="lifeInput" type="range" min="0" max="10" value="5">
+              <output id="lifeOutput">5</output>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <label class="check-row">
+              <input id="illnessInput" type="checkbox">
+              Illness or injury flag
+            </label>
+            <label class="check-row">
+              <input id="eventModeInput" type="checkbox" checked>
+              Event-focused programming
+            </label>
+          </div>
+        </section>
+
+        <section class="panel phase-panel" aria-labelledby="phaseTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Current block</p>
+              <h2 id="phaseTitle">Loading</h2>
+            </div>
+            <span class="status-pill subtle" id="phasePill">Phase</span>
+          </div>
+          <div class="phase-copy" id="phaseCopy"></div>
+          <div class="metric-strip" id="metricStrip"></div>
+        </section>
+
+        <section class="panel availability-panel" aria-labelledby="availabilityTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Week</p>
+              <h2 id="availabilityTitle">Availability</h2>
+            </div>
+            <button class="icon-button" id="resetAvailabilityButton" type="button" title="Reset availability">Reset</button>
+          </div>
+          <div class="availability-grid" id="availabilityGrid"></div>
+        </section>
+
+        <section class="panel today-panel" aria-labelledby="adjustmentTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Adjustment</p>
+              <h2 id="adjustmentTitle">Today’s call</h2>
+            </div>
+            <span class="readiness-score" id="readinessScore">--</span>
+          </div>
+          <div class="callout" id="dailyCallout"></div>
+          <div class="mini-actions" id="miniActions"></div>
+        </section>
+
+        <section class="week-section" aria-labelledby="weekTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Generated plan</p>
+              <h2 id="weekTitle">This week</h2>
+            </div>
+            <div class="export-actions">
+              <button class="icon-button" id="icalButton" type="button">Export iCal</button>
+              <button class="primary-button" id="exportButton" type="button">Export week</button>
+            </div>
+          </div>
+          <div class="week-grid" id="weekGrid"></div>
+        </section>
+
+        <section class="panel data-panel" aria-labelledby="dataTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Data</p>
+              <h2 id="dataTitle">Training baseline</h2>
+            </div>
+            <label class="file-button">
+              Import CSV
+              <input id="csvInput" type="file" accept=".csv,text/csv">
+            </label>
+          </div>
+          <div class="baseline-grid" id="baselineGrid"></div>
+          <div class="sync-actions">
+            <a class="primary-button" href="/api/strava/connect">Connect Strava</a>
+            <button class="icon-button" id="syncButton" type="button">Sync now</button>
+          </div>
+          <div class="sync-status" id="syncStatus">Strava sync will activate after deployment settings are configured.</div>
+          <div class="data-note" id="dataNote"></div>
+        </section>
+
+        <section class="panel coach-panel" aria-labelledby="coachTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Coach</p>
+              <h2 id="coachTitle">Plan dialogue</h2>
+            </div>
+            <button class="icon-button" id="saveCoachButton" type="button">Save</button>
+          </div>
+          <div class="control-grid single">
+            <label>
+              Coach name
+              <input id="coachNameInput" type="text" value="Elias" autocomplete="off">
+            </label>
+          </div>
+          <div class="coach-thread" id="coachConversation"></div>
+          <label class="coach-input">
+            Start or adjust your plan
+            <textarea id="planPromptInput" rows="4" placeholder="Tell your coach what life looks like, what you’re worried about, or what you want this plan to optimize for."></textarea>
+          </label>
+          <button class="primary-button full-button" id="askCoachButton" type="button">Ask coach</button>
+        </section>
+
+        <section class="panel feedback-panel" aria-labelledby="feedbackTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">After action</p>
+              <h2 id="feedbackTitle">Session feedback</h2>
+            </div>
+          </div>
+          <label>
+            Completed session
+            <select id="completedWorkoutSelect"></select>
+          </label>
+          <div class="control-grid">
+            <label>
+              RPE
+              <input id="rpeInput" type="range" min="1" max="10" value="6">
+              <output id="rpeOutput">6</output>
+            </label>
+            <label>
+              How did it land?
+              <select id="feelingInput">
+                <option value="strong">Strong</option>
+                <option value="normal" selected>Normal</option>
+                <option value="rough">Rough</option>
+                <option value="pain">Pain or concern</option>
+              </select>
+            </label>
+          </div>
+          <label class="coach-input">
+            Notes for your coach
+            <textarea id="feedbackNotesInput" rows="3" placeholder="Sleep, soreness, energy, HR drift, pain, confidence, or what got in the way."></textarea>
+          </label>
+          <button class="primary-button full-button" id="completeWorkoutButton" type="button">Complete and adapt</button>
+          <div class="sync-status" id="feedbackResponse">Your coach will use this to adapt the next session.</div>
+        </section>
+
+        <section class="panel strength-panel" aria-labelledby="strengthTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Amped Fitness</p>
+              <h2 id="strengthTitle">Strength menu</h2>
+            </div>
+          </div>
+          <div class="strength-list" id="strengthList"></div>
+        </section>
+
+        <section class="timeline-section" aria-labelledby="timelineTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Season</p>
+              <h2 id="timelineTitle">Race timeline</h2>
+            </div>
+          </div>
+          <div class="timeline" id="timeline"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
