@@ -5,7 +5,14 @@ const STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_API_URL = "https://www.strava.com/api/v3";
 
 function getStravaEnv() {
-  return getRequiredEnv(["STRAVA_CLIENT_ID", "STRAVA_CLIENT_SECRET"]);
+  const env = getRequiredEnv(["STRAVA_CLIENT_ID", "STRAVA_CLIENT_SECRET"]);
+  if (!/^\d+$/.test(env.STRAVA_CLIENT_ID)) {
+    const error = new Error("STRAVA_CLIENT_ID must be the numeric Client ID from Strava, not placeholder text.");
+    error.statusCode = 500;
+    error.missing = ["STRAVA_CLIENT_ID"];
+    throw error;
+  }
+  return env;
 }
 
 function authorizationUrl({ redirectUri, state }) {

@@ -1,7 +1,13 @@
 const DEFAULT_TIMEZONE = "America/Chicago";
 
 function cleanBaseUrl(value) {
-  return value ? value.replace(/\/+$/, "") : "";
+  const cleaned = value ? value.trim().replace(/\/+$/, "") : "";
+  if (!cleaned) return "";
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  if (cleaned.startsWith("localhost") || cleaned.startsWith("127.0.0.1")) {
+    return `http://${cleaned}`;
+  }
+  return `https://${cleaned}`;
 }
 
 function getBaseUrl(req) {
