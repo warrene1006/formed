@@ -579,24 +579,6 @@ output {
   margin-top: 14px;
 }
 
-.sync-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.sync-actions a {
-  text-decoration: none;
-}
-
-.sync-actions .primary-button,
-.sync-actions .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .sync-status {
   margin-top: 10px;
   border: 1px solid var(--line);
@@ -941,9 +923,7 @@ output {
     justify-content: stretch;
   }
 
-  .export-actions button,
-  .sync-actions a,
-  .sync-actions button {
+  .export-actions button {
     flex: 1 1 140px;
   }
 }

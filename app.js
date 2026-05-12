@@ -4,6 +4,9 @@ const APP_NAME = "Formed";
 const DEFAULT_COACH_NAME = "Elias";
 const TIMEZONE = "America/Chicago";
 const DEPLOYED_APP_URL = "https://formed-amber.vercel.app";
+const SYNC_TOKEN_KEY = "formedSyncToken";
+const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+const FOCUS_SYNC_THROTTLE_MS = 5 * 60 * 1000;
 const CALENDAR_DEFAULTS = {
   weekdayStart: "05:30",
   weekdayDoneBy: "07:00",
@@ -120,6 +123,8 @@ let coachMessages = loadCoachMessages();
 let workoutOverrides = loadJson("formedWorkoutOverrides", {});
 let completedWorkouts = new Set(loadJson("formedCompletedWorkouts", []));
 let lastSession = loadInitialLastSession();
+let syncInFlight = false;
+let lastAutoSyncAt = 0;
 
 const els = {
   appBrand: document.querySelector("#appBrand"),
@@ -150,9 +155,6 @@ const els = {
   lastSessionSource: document.querySelector("#lastSessionSource"),
   lastSessionBody: document.querySelector("#lastSessionBody"),
   dataNote: document.querySelector("#dataNote"),
-  stravaConnectLink: document.querySelector("#stravaConnectLink"),
-  syncButton: document.querySelector("#syncButton"),
-  resetSyncTokenButton: document.querySelector("#resetSyncTokenButton"),
   syncStatus: document.querySelector("#syncStatus"),
   coachNameInput: document.querySelector("#coachNameInput"),
   saveCoachButton: document.querySelector("#saveCoachButton"),
@@ -195,6 +197,15 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getSyncToken({ prompt = false } = {}) {
+  let token = localStorage.getItem(SYNC_TOKEN_KEY);
+  if (!token && prompt) {
+    token = window.prompt("Paste your private Formed sync token once so background sync can run.");
+    if (token) localStorage.setItem(SYNC_TOKEN_KEY, token.trim());
+  }
+  return token;
 }
 
 function sessionTimestamp(session) {
@@ -866,7 +877,7 @@ function renderCoachIdentity() {
   }
   els.coachNameInput.value = coachName;
   if (els.syncStatus && !els.syncStatus.dataset.touched) {
-    els.syncStatus.textContent = `Strava sync will activate after deployment settings are configured. Coach: ${coachName}.`;
+    els.syncStatus.textContent = `Background sync is standing by. Coach: ${coachName}.`;
   }
 }
 
@@ -1522,43 +1533,63 @@ async function fetchLatestSession(token, { silent = false } = {}) {
   }
 }
 
-function resetSyncToken() {
-  localStorage.removeItem("formedSyncToken");
-  if (els.syncStatus) {
-    els.syncStatus.dataset.touched = "true";
-    els.syncStatus.textContent = "Saved sync token cleared. Click Sync now and paste the CALENDAR_TOKEN from Vercel.";
-  }
+function syncStatus(message) {
+  if (!els.syncStatus) return;
+  els.syncStatus.dataset.touched = "true";
+  els.syncStatus.textContent = message;
 }
 
-async function syncStravaActivities() {
+async function syncStravaActivities({ promptForToken = false, silent = false } = {}) {
   if (!els.syncStatus) return;
-  let token = localStorage.getItem("formedSyncToken");
+  if (syncInFlight) return;
+  let token = getSyncToken({ prompt: promptForToken });
   if (!token) {
-    token = window.prompt("Enter your private Formed calendar/sync token");
-    if (token) localStorage.setItem("formedSyncToken", token);
-  }
-  if (!token) {
-    els.syncStatus.textContent = "Sync canceled. The private token protects your workout and calendar feed.";
+    if (!silent) syncStatus("Background sync is ready. It will run automatically once the private token is saved in this browser.");
     return;
   }
-  els.syncStatus.textContent = "Requesting Strava sync...";
+  syncInFlight = true;
+  if (!silent) syncStatus("Background Strava sync running...");
   try {
     const response = await fetch(apiUrl(`/api/strava/sync?token=${encodeURIComponent(token)}`));
     const payload = await response.json();
     if (!response.ok) {
       if (response.status === 401) {
-        localStorage.removeItem("formedSyncToken");
+        localStorage.removeItem(SYNC_TOKEN_KEY);
       }
       throw new Error(payload.error || "Sync is not configured yet.");
     }
     const session = serverActivityToLastSession(payload.latest_activity);
     if (session) saveLastSession(session);
-    els.syncStatus.textContent = `Synced ${payload.synced} Strava activities. ${coachProfile.coachName || DEFAULT_COACH_NAME} can now use the latest completions in the calendar feed and next plan refresh.`;
+    lastAutoSyncAt = Date.now();
+    syncStatus(`Background sync healthy. Last checked ${new Date(lastAutoSyncAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.`);
     renderLastSession();
   } catch (error) {
-    els.syncStatus.dataset.touched = "true";
-    els.syncStatus.textContent = `${error.message} If you mistyped the token, I cleared the saved value; click Sync now and paste the CALENDAR_TOKEN from Vercel.`;
+    if (!silent) {
+      syncStatus(`${error.message} Background sync paused; Garmin FIT import still works.`);
+    }
+  } finally {
+    syncInFlight = false;
   }
+}
+
+function startBackgroundSync() {
+  const params = new URLSearchParams(location.search);
+  const justConnected = params.get("strava") === "connected";
+  syncStravaActivities({ promptForToken: justConnected, silent: !justConnected });
+
+  window.setInterval(() => {
+    syncStravaActivities({ silent: true });
+  }, AUTO_SYNC_INTERVAL_MS);
+
+  const syncAfterFocus = () => {
+    if (Date.now() - lastAutoSyncAt > FOCUS_SYNC_THROTTLE_MS) {
+      syncStravaActivities({ silent: true });
+    }
+  };
+  window.addEventListener("focus", syncAfterFocus);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncAfterFocus();
+  });
 }
 
 function bindEvents() {
@@ -1598,8 +1629,6 @@ function bindEvents() {
 
   els.exportButton.addEventListener("click", exportWeekCsv);
   els.icalButton.addEventListener("click", exportWeekIcs);
-  els.syncButton.addEventListener("click", syncStravaActivities);
-  els.resetSyncTokenButton.addEventListener("click", resetSyncToken);
   els.saveCoachButton.addEventListener("click", saveCoachProfile);
   els.coachNameInput.addEventListener("change", saveCoachProfile);
   els.coachQuickChat.addEventListener("submit", askCoachFromTop);
@@ -1613,17 +1642,12 @@ function bindEvents() {
 function init() {
   els.todayInput.value = DEFAULT_TODAY;
   els.coachNameInput.value = coachProfile.coachName || DEFAULT_COACH_NAME;
-  els.stravaConnectLink.href = apiUrl("/api/strava/connect");
   buildAvailabilityControls();
   renderStrengthMenu();
   bindEvents();
   render();
-
-  if (new URLSearchParams(location.search).get("strava") === "connected" && els.syncStatus) {
-    els.syncStatus.textContent = "Strava connected. Use Sync now after your private token is set.";
-  }
-
-  fetchLatestSession(localStorage.getItem("formedSyncToken"), { silent: true });
+  fetchLatestSession(getSyncToken(), { silent: true });
+  startBackgroundSync();
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {});
