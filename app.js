@@ -123,6 +123,7 @@ let coachMessages = loadCoachMessages();
 let workoutOverrides = loadJson("formedWorkoutOverrides", {});
 let completedWorkouts = new Set(loadJson("formedCompletedWorkouts", []));
 let lastSession = loadInitialLastSession();
+let nutrition = loadJson("formedNutrition", null);
 let syncInFlight = false;
 let lastAutoSyncAt = 0;
 
@@ -154,6 +155,9 @@ const els = {
   baselineGrid: document.querySelector("#baselineGrid"),
   lastSessionSource: document.querySelector("#lastSessionSource"),
   lastSessionBody: document.querySelector("#lastSessionBody"),
+  nutritionSource: document.querySelector("#nutritionSource"),
+  nutritionGrid: document.querySelector("#nutritionGrid"),
+  nutritionNote: document.querySelector("#nutritionNote"),
   dataNote: document.querySelector("#dataNote"),
   syncStatus: document.querySelector("#syncStatus"),
   coachNameInput: document.querySelector("#coachNameInput"),
@@ -866,6 +870,62 @@ function renderBaseline() {
   els.dataNote.textContent = baseline.sourceNote;
 }
 
+function nutritionCoachSummary() {
+  if (!nutrition?.latestDate || !nutrition?.totals) return "";
+  const totals = nutrition.totals;
+  const calories = formatNutritionMetric(totals.calories, "");
+  const protein = formatNutritionMetric(totals.protein, "g");
+  const carbs = formatNutritionMetric(totals.carbs, "g");
+  if (!calories && !protein && !carbs) return "";
+  return `Latest MyFitnessPal day: ${[
+    calories ? `${calories} calories` : null,
+    protein ? `${protein} protein` : null,
+    carbs ? `${carbs} carbs` : null
+  ].filter(Boolean).join(", ")}.`;
+}
+
+function renderNutrition() {
+  if (!els.nutritionGrid) return;
+  if (!nutrition?.latestDate) {
+    els.nutritionSource.textContent = "No import";
+    els.nutritionGrid.innerHTML = `
+      <div class="metric">
+        <strong>--</strong>
+        <span>nutrition CSV</span>
+      </div>
+      <div class="metric">
+        <strong>--</strong>
+        <span>protein</span>
+      </div>
+      <div class="metric">
+        <strong>--</strong>
+        <span>carbs</span>
+      </div>
+    `;
+    els.nutritionNote.textContent = "Import a MyFitnessPal nutrition CSV to give Elias fueling context.";
+    return;
+  }
+
+  const totals = nutrition.totals || {};
+  const metrics = [
+    [formatNutritionMetric(totals.calories, ""), "calories"],
+    [formatNutritionMetric(totals.protein, "g"), "protein"],
+    [formatNutritionMetric(totals.carbs, "g"), "carbs"],
+    [formatNutritionMetric(totals.fat, "g"), "fat"],
+    [formatNutritionMetric(totals.fiber, "g"), "fiber"],
+    [formatNutritionMetric(totals.sodium, "mg"), "sodium"]
+  ];
+
+  els.nutritionSource.textContent = nutrition.source || "MFP CSV";
+  els.nutritionGrid.innerHTML = metrics.map(([value, label]) => `
+    <div class="metric">
+      <strong>${escapeHtml(value || "--")}</strong>
+      <span>${escapeHtml(label)}</span>
+    </div>
+  `).join("");
+  els.nutritionNote.textContent = `${nutrition.dateLabel || nutrition.latestDate}: ${nutrition.entryCount || 0} entries across ${nutrition.mealCount || 0} meals. ${nutrition.readinessNote || ""}`.trim();
+}
+
 function renderCoachIdentity() {
   const coachName = coachProfile.coachName || DEFAULT_COACH_NAME;
   document.title = APP_NAME;
@@ -983,6 +1043,139 @@ function parseNumber(value) {
   if (!value || value === "--") return null;
   const number = Number(String(value).replaceAll(",", ""));
   return Number.isFinite(number) ? number : null;
+}
+
+function parseNutritionNumber(value) {
+  if (value == null || value === "" || value === "--") return null;
+  const cleaned = String(value).replace(/,/g, "").replace(/[^\d.-]/g, "");
+  if (!cleaned || cleaned === "-" || cleaned === ".") return null;
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatNutritionMetric(value, unit) {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  const rounded = Math.round(Number(value) * 10) / 10;
+  const compact = compactNumber(rounded, rounded % 1 === 0 ? 0 : 1);
+  return unit ? `${compact}${unit}` : compact;
+}
+
+function normalizeCsvHeader(value) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function csvValue(row, candidates) {
+  const normalizedCandidates = candidates.map(normalizeCsvHeader).filter(Boolean);
+  const entries = Object.entries(row).map(([key, value]) => [normalizeCsvHeader(key), value]);
+  const exact = entries.find(([key]) => normalizedCandidates.includes(key));
+  if (exact) return exact[1];
+  const partial = entries.find(([key]) => normalizedCandidates.some((candidate) => key.includes(candidate)));
+  return partial?.[1] ?? "";
+}
+
+function parseFlexibleDate(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const direct = new Date(trimmed);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  const isoish = new Date(trimmed.replace(" ", "T"));
+  if (!Number.isNaN(isoish.getTime())) return isoish;
+  const match = trimmed.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function looksLikeMyFitnessPalRows(rows) {
+  const headers = Object.keys(rows[0] || {});
+  if (!headers.length) return false;
+  const has = (candidates) => {
+    const normalizedCandidates = candidates.map(normalizeCsvHeader);
+    return headers.some((header) => {
+      const normalized = normalizeCsvHeader(header);
+      return normalizedCandidates.some((candidate) => normalized.includes(candidate));
+    });
+  };
+  const hasMacroShape = has(["protein"]) && has(["fat"]) && has(["carbohydrates", "carbs", "total carbohydrate"]);
+  const hasActivityShape = has(["activity type", "moving time", "aerobic te", "avg hr", "avg pace"]);
+  const hasDiarySignal = has(["meal", "food", "nutrition", "timestamp"]);
+  return hasMacroShape && (!hasActivityShape || hasDiarySignal);
+}
+
+function nutritionReadinessNote(totals) {
+  const protein = totals.protein ?? 0;
+  const carbs = totals.carbs ?? 0;
+  const calories = totals.calories ?? 0;
+  if (calories && calories < 1600) return "Fuel looks light for endurance training; expect Elias to protect recovery.";
+  if (protein < 80) return "Protein is light; Elias will factor that into recovery and strength work.";
+  if (carbs < 140) return "Carbs are modest; Elias will keep an eye on harder run and bike days.";
+  return "Fuel support looks usable for the next training decision.";
+}
+
+function summarizeMyFitnessPal(rows) {
+  const entries = rows.map((row) => {
+    const date = parseFlexibleDate(csvValue(row, ["date", "meal date", "day"]));
+    return {
+      date,
+      key: date ? dateKey(date) : "Imported",
+      meal: csvValue(row, ["meal", "meal name", "meal category"]) || "Logged",
+      food: csvValue(row, ["food", "food name", "description", "item", "name"]),
+      calories: parseNutritionNumber(csvValue(row, ["calories", "kcal", "energy"])),
+      protein: parseNutritionNumber(csvValue(row, ["protein", "protein g", "protein (g)"])),
+      carbs: parseNutritionNumber(csvValue(row, ["carbohydrates", "carbs", "total carbohydrate"])),
+      fat: parseNutritionNumber(csvValue(row, ["fat", "total fat", "fat g", "fat (g)"])),
+      fiber: parseNutritionNumber(csvValue(row, ["fiber", "dietary fiber"])),
+      sugar: parseNutritionNumber(csvValue(row, ["sugar", "sugars"])),
+      sodium: parseNutritionNumber(csvValue(row, ["sodium", "sodium mg"]))
+    };
+  }).filter((entry) => entry.date || ["calories", "protein", "carbs", "fat"].some((field) => entry[field] != null));
+
+  if (!entries.length) {
+    throw new Error("That looks like a MyFitnessPal file, but I could not read dated nutrition rows.");
+  }
+
+  const grouped = entries.reduce((map, entry) => {
+    map.set(entry.key, [...(map.get(entry.key) || []), entry]);
+    return map;
+  }, new Map());
+  const sortedKeys = [...grouped.keys()].sort((a, b) => {
+    if (a === "Imported") return -1;
+    if (b === "Imported") return 1;
+    return parseDate(a) - parseDate(b);
+  });
+  const latestDate = sortedKeys.at(-1);
+  const latestEntries = grouped.get(latestDate) || [];
+  const sum = (field) => Math.round(latestEntries.reduce((total, entry) => total + (entry[field] || 0), 0) * 10) / 10;
+  const totals = {
+    calories: sum("calories"),
+    protein: sum("protein"),
+    carbs: sum("carbs"),
+    fat: sum("fat"),
+    fiber: sum("fiber"),
+    sugar: sum("sugar"),
+    sodium: sum("sodium")
+  };
+  const validDates = entries.map((entry) => entry.date).filter(Boolean);
+  const mealCount = new Set(latestEntries.map((entry) => entry.meal).filter(Boolean)).size;
+
+  return {
+    source: "MyFitnessPal CSV",
+    importedAt: new Date().toISOString(),
+    latestDate,
+    dateLabel: latestDate === "Imported"
+      ? "Imported nutrition"
+      : formatDate(parseDate(latestDate), { month: "short", day: "numeric", year: "numeric" }),
+    dateRange: validDates.length
+      ? `${formatDate(new Date(Math.min(...validDates)))}-${formatDate(new Date(Math.max(...validDates)))}, ${new Date(Math.max(...validDates)).getFullYear()}`
+      : "Imported rows",
+    entryCount: latestEntries.length,
+    mealCount,
+    totals,
+    readinessNote: nutritionReadinessNote(totals)
+  };
 }
 
 function parseDuration(value) {
@@ -1108,7 +1301,14 @@ async function importTrainingDataFile(file) {
   }
 
   const text = await file.text();
-  baseline = summarizeActivities(parseCsv(text));
+  const rows = parseCsv(text);
+  if (looksLikeMyFitnessPalRows(rows)) {
+    nutrition = summarizeMyFitnessPal(rows);
+    saveJson("formedNutrition", nutrition);
+    return `Imported MyFitnessPal fuel data for ${nutrition.dateLabel}.`;
+  }
+
+  baseline = summarizeActivities(rows);
   if (baseline.lastSession) saveLastSession(baseline.lastSession);
   return "Imported Garmin/Strava CSV baseline.";
 }
@@ -1307,6 +1507,7 @@ function render() {
   renderDailyCallout(today, currentWeek, readiness, phase);
   renderBaseline();
   renderLastSession();
+  renderNutrition();
   renderCoachConversation();
   renderTimeline(today);
 }
@@ -1320,7 +1521,8 @@ function fallbackCoachReply(prompt) {
     : readiness.level === "amber"
       ? "I’m going to keep pressure controlled until recovery signals improve."
       : "The next move is recovery first, training second.";
-  return `${coachName}: I hear you. ${caution} For this plan, the next anchor is ${nextKey.title}. Keep the family clock protected, log sleep/HRV, and tell me after the session whether it felt smooth, heavy, or painful. You said: “${prompt}”`;
+  const fuel = nutritionCoachSummary();
+  return `${coachName}: I hear you. ${caution} ${fuel ? `${fuel} ` : ""}For this plan, the next anchor is ${nextKey.title}. Keep the family clock protected, log sleep/HRV, and tell me after the session whether it felt smooth, heavy, or painful. You said: “${prompt}”`;
 }
 
 async function askCoach() {
@@ -1341,6 +1543,7 @@ async function askCoach() {
         prompt,
         context: {
           baseline,
+          nutrition,
           currentWeek: currentWeek.map((item) => ({
             day: item.day,
             title: item.title,
@@ -1454,7 +1657,8 @@ async function completeWorkoutWithFeedback() {
         workout,
         nextWorkout,
         feedback,
-        baseline
+        baseline,
+        nutrition
       })
     });
     const payload = await response.json();

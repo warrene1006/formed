@@ -282,6 +282,7 @@ button {
 
 .data-panel,
 .last-session-panel,
+.nutrition-panel,
 .coach-panel,
 .feedback-panel,
 .strength-panel {
@@ -384,7 +385,8 @@ output {
 }
 
 .metric-strip,
-.baseline-grid {
+.baseline-grid,
+.nutrition-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -836,6 +838,7 @@ output {
   .today-panel,
   .data-panel,
   .last-session-panel,
+  .nutrition-panel,
   .coach-panel,
   .feedback-panel,
   .strength-panel {
@@ -883,6 +886,7 @@ output {
   .today-panel,
   .data-panel,
   .last-session-panel,
+  .nutrition-panel,
   .coach-panel,
   .feedback-panel,
   .strength-panel,
@@ -896,6 +900,7 @@ output {
   .control-grid,
   .metric-strip,
   .baseline-grid,
+  .nutrition-grid,
   .last-session-stats,
   .mini-actions {
     grid-template-columns: 1fr;

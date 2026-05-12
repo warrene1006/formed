@@ -11,6 +11,7 @@ Seeded assumptions:
 - Strength work uses Amped Fitness sessions.
 - The generated week can export to CSV or iCalendar `.ics` for Apple Calendar.
 - Garmin `.fit` activity files can be imported directly for richer last-session details such as strength sets, reps, calories, heart rate, and training effect.
+- MyFitnessPal nutrition CSV exports can be imported into the Fuel panel so coach dialogue and feedback adaptation have recent fueling context.
 - The MVP server scaffold supports Strava OAuth, Strava activity sync, Supabase persistence, and a private live calendar feed.
 - Users can name their coach. Eric's coach defaults to `Elias`.
 - The app has a plan-start dialogue and post-session feedback loop. Without an AI key it uses local fallback logic; with `OPENAI_API_KEY`, the server coach endpoints use the OpenAI Responses API.
