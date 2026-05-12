@@ -267,12 +267,8 @@ button {
   grid-column: 2;
 }
 
-.availability-panel {
-  grid-column: 3;
-}
-
 .today-panel {
-  grid-column: 1;
+  grid-column: 3;
 }
 
 .week-section {
@@ -481,29 +477,6 @@ output {
   color: var(--ink);
   font-size: 0.86rem;
   line-height: 1.45;
-}
-
-.availability-grid {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.day-slider {
-  display: grid;
-  grid-template-columns: 42px 1fr 52px;
-  gap: 10px;
-  align-items: center;
-}
-
-.day-slider span {
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.day-slider output {
-  text-align: right;
-  font-weight: 800;
 }
 
 .icon-button,
@@ -845,8 +818,7 @@ output {
     grid-column: 1;
   }
 
-  .phase-panel,
-  .availability-panel {
+  .phase-panel {
     grid-column: 2;
   }
 
@@ -891,7 +863,6 @@ output {
   .feedback-panel,
   .strength-panel,
   .phase-panel,
-  .availability-panel,
   .week-section,
   .timeline-section {
     grid-column: 1;

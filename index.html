@@ -102,17 +102,6 @@
           <div class="metric-strip" id="metricStrip"></div>
         </section>
 
-        <section class="panel availability-panel" aria-labelledby="availabilityTitle">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Week</p>
-              <h2 id="availabilityTitle">Availability</h2>
-            </div>
-            <button class="icon-button" id="resetAvailabilityButton" type="button" title="Reset availability">Reset</button>
-          </div>
-          <div class="availability-grid" id="availabilityGrid"></div>
-        </section>
-
         <section class="panel today-panel" aria-labelledby="adjustmentTitle">
           <div class="panel-heading">
             <div>
@@ -147,7 +136,7 @@
             </div>
             <label class="file-button">
               Import data
-              <input id="csvInput" type="file" accept=".csv,text/csv,.fit,application/octet-stream">
+              <input id="csvInput" type="file" accept=".csv,text/csv,.fit,.tcx,.pwx,application/xml,text/xml,application/octet-stream" multiple>
             </label>
           </div>
           <div class="baseline-grid" id="baselineGrid"></div>

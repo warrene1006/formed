@@ -12,6 +12,7 @@ Seeded assumptions:
 - The generated week can export to CSV or iCalendar `.ics` for Apple Calendar.
 - Garmin `.fit` activity files can be imported directly for richer last-session details such as strength sets, reps, calories, heart rate, and training effect.
 - MyFitnessPal nutrition CSV exports can be imported into the Fuel panel so coach dialogue and feedback adaptation have recent fueling context.
+- TrainingPeaks export imports support summary CSV plus `.fit`, `.tcx`, and `.pwx` workout files, including TSS, IF, normalized power, HR, power, cadence, and elevation when available.
 - The MVP server scaffold supports Strava OAuth, Strava activity sync, Supabase persistence, and a private live calendar feed.
 - Users can name their coach. Eric's coach defaults to `Elias`.
 - The app has a plan-start dialogue and post-session feedback loop. Without an AI key it uses local fallback logic; with `OPENAI_API_KEY`, the server coach endpoints use the OpenAI Responses API.
@@ -38,7 +39,7 @@ For both computer and phone, host this as a small web app and install it from th
 - Better daily use: deploy the folder to Netlify, Vercel, GitHub Pages, Cloudflare Pages, or a small personal server.
 - Once hosted over HTTPS, the app can be added to the iPhone home screen as a PWA.
 
-The app currently updates when you change readiness inputs, availability, dates, or import a fresh CSV. Automatic completed-workout updates require data sync:
+The app currently updates when you change readiness inputs, dates, or import fresh workout/nutrition files. Automatic completed-workout updates require data sync:
 
 - Strava OAuth for activity completion and pace/HR data.
 - HealthKit in an iOS wrapper for Apple Health, sleep, HRV, resting HR, and body metrics.

@@ -147,7 +147,6 @@ const els = {
   phasePill: document.querySelector("#phasePill"),
   phaseCopy: document.querySelector("#phaseCopy"),
   metricStrip: document.querySelector("#metricStrip"),
-  availabilityGrid: document.querySelector("#availabilityGrid"),
   weekTitle: document.querySelector("#weekTitle"),
   weekGrid: document.querySelector("#weekGrid"),
   dailyCallout: document.querySelector("#dailyCallout"),
@@ -175,7 +174,6 @@ const els = {
   csvInput: document.querySelector("#csvInput"),
   exportButton: document.querySelector("#exportButton"),
   icalButton: document.querySelector("#icalButton"),
-  resetAvailabilityButton: document.querySelector("#resetAvailabilityButton"),
   eventCountdown: document.querySelector("#eventCountdown"),
   strengthList: document.querySelector("#strengthList"),
   timeline: document.querySelector("#timeline")
@@ -307,29 +305,7 @@ function addDays(date, days) {
 }
 
 function getAvailability() {
-  const values = {};
-  mondayOrder.forEach((day) => {
-    const input = document.querySelector(`[data-availability="${day}"]`);
-    values[day] = Number(input?.value ?? availabilityDefaults[day]);
-  });
-  return values;
-}
-
-function buildAvailabilityControls() {
-  els.availabilityGrid.innerHTML = mondayOrder.map((day) => `
-    <label class="day-slider">
-      <span>${day}</span>
-      <input data-availability="${day}" type="range" min="0" max="150" step="5" value="${availabilityDefaults[day]}">
-      <output>${availabilityDefaults[day]}m</output>
-    </label>
-  `).join("");
-
-  els.availabilityGrid.querySelectorAll("input").forEach((input) => {
-    input.addEventListener("input", () => {
-      input.nextElementSibling.textContent = `${input.value}m`;
-      render();
-    });
-  });
+  return { ...availabilityDefaults };
 }
 
 function getReadiness() {
@@ -787,6 +763,16 @@ function compactNumber(value, digits = 1) {
   });
 }
 
+function metersToMiles(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number / 1609.344 * 100) / 100 : null;
+}
+
+function metersToFeet(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number * 3.28084) : null;
+}
+
 function sessionMetricRows(session) {
   return [
     [session.sport, "type"],
@@ -805,6 +791,9 @@ function sessionMetricRows(session) {
     [session.avgHr ? `${Math.round(session.avgHr)} bpm` : null, "avg HR"],
     [session.maxHr ? `${Math.round(session.maxHr)} bpm` : null, "max HR"],
     [session.aerobicTe != null ? compactNumber(session.aerobicTe, 1) : null, "aerobic TE"],
+    [session.tss != null ? compactNumber(session.tss, 1) : null, "TSS"],
+    [session.intensityFactor != null ? compactNumber(session.intensityFactor, 2) : null, "IF"],
+    [session.normalizedPower ? `${Math.round(session.normalizedPower)} W` : null, "NP"],
     [session.calories ? compactNumber(session.calories, 0) : null, "calories"],
     [session.avgCadence ? `${Math.round(session.avgCadence)} spm` : null, "avg cadence"],
     [session.maxCadence ? `${Math.round(session.maxCadence)} spm` : null, "max cadence"],
@@ -852,12 +841,17 @@ function renderLastSession() {
 
 function renderBaseline() {
   const weeklyAverage = Math.round((baseline.last4RunMiles ?? 0) / 4 * 10) / 10;
+  const loadMetric = baseline.avgRecentTrainingEffect != null
+    ? [baseline.avgRecentTrainingEffect, "avg aerobic TE"]
+    : baseline.avgRecentTss != null
+      ? [baseline.avgRecentTss, "avg recent TSS"]
+      : ["--", "avg load"];
   const metrics = [
     [baseline.runCount, "run activities"],
     [`${weeklyAverage}`, "mi/wk, last 4 weeks"],
     [`${baseline.recentPeakWeek ?? "--"}`, "recent peak week mi"],
     [`${baseline.avgRecentHr ?? "--"}`, "avg recent HR"],
-    [`${baseline.avgRecentTrainingEffect ?? "--"}`, "avg aerobic TE"],
+    loadMetric,
     [baseline.latestActivity ?? "No activity", "latest activity"]
   ];
 
@@ -1186,10 +1180,10 @@ function parseDuration(value) {
   return 0;
 }
 
-function csvActivityToLastSession(activity) {
+function activityToLastSession(activity, source = "Imported activity") {
   if (!activity) return null;
   return {
-    source: "Garmin CSV",
+    source,
     date: activity.date?.toISOString(),
     title: activity.title || activity.type || "Training session",
     sport: activity.type || "Training",
@@ -1200,6 +1194,9 @@ function csvActivityToLastSession(activity) {
     avgHr: activity.avgHr,
     maxHr: activity.maxHr,
     aerobicTe: activity.trainingEffect,
+    tss: activity.tss,
+    intensityFactor: activity.intensityFactor,
+    normalizedPower: activity.normalizedPower,
     avgPace: activity.avgPace,
     bestPace: activity.bestPace,
     calories: activity.calories,
@@ -1209,37 +1206,19 @@ function csvActivityToLastSession(activity) {
     descent: activity.descent,
     strideLength: activity.strideLength,
     steps: activity.steps,
-    notes: "Imported from Garmin CSV."
+    notes: activity.notes || `Imported from ${source}.`
   };
 }
 
-function summarizeActivities(rows) {
-  const activities = rows
-    .map((row) => ({
-      type: row["Activity Type"] ?? "",
-      title: row.Title || row["Activity Type"] || "Training session",
-      date: row.Date ? new Date(row.Date.replace(" ", "T")) : null,
-      distance: parseNumber(row.Distance),
-      seconds: parseDuration(row.Time),
-      movingSeconds: parseDuration(row["Moving Time"]),
-      elapsedSeconds: parseDuration(row["Elapsed Time"]),
-      calories: parseNumber(row.Calories),
-      avgHr: parseNumber(row["Avg HR"]),
-      maxHr: parseNumber(row["Max HR"]),
-      trainingEffect: parseNumber(row["Aerobic TE"]),
-      avgCadence: parseNumber(row["Avg Run Cadence"]),
-      maxCadence: parseNumber(row["Max Run Cadence"]),
-      avgPace: row["Avg Pace"] && row["Avg Pace"] !== "--" ? row["Avg Pace"] : null,
-      bestPace: row["Best Pace"] && row["Best Pace"] !== "--" ? row["Best Pace"] : null,
-      ascent: parseNumber(row["Total Ascent"]),
-      descent: parseNumber(row["Total Descent"]),
-      strideLength: parseNumber(row["Avg Stride Length"]),
-      steps: parseNumber(row.Steps)
-    }))
+function summarizeImportedActivities(activities, source, sourceNote) {
+  const cleanActivities = activities
     .filter((activity) => activity.date && !Number.isNaN(activity.date.getTime()));
 
-  const runs = activities.filter((activity) => activity.type.toLowerCase().includes("running") && activity.distance);
-  const latest = [...activities].sort((a, b) => b.date - a.date)[0];
+  const runs = cleanActivities.filter((activity) => {
+    const type = activity.type.toLowerCase();
+    return (type.includes("running") || type === "run") && activity.distance;
+  });
+  const latest = [...cleanActivities].sort((a, b) => b.date - a.date)[0];
   const maxDate = latest?.date ?? parseDate(DEFAULT_TODAY);
   const fourWeekStart = new Date(maxDate);
   fourWeekStart.setDate(maxDate.getDate() - 28);
@@ -1251,7 +1230,7 @@ function summarizeActivities(rows) {
 
   runs.forEach((runActivity) => {
     const week = dateKey(getWeekStart(runActivity.date));
-    weekly.set(week, (weekly.get(week) ?? 0) + runActivity.distance);
+    weekly.set(week, (weekly.get(week) ?? 0) + (runActivity.distance || 0));
   });
 
   const total = (field, list) => list.reduce((sum, item) => sum + (item[field] ?? 0), 0);
@@ -1262,11 +1241,11 @@ function summarizeActivities(rows) {
   };
 
   return {
-    source: "Imported CSV",
-    activityCount: activities.length,
+    source,
+    activityCount: cleanActivities.length,
     runCount: runs.length,
-    dateRange: activities.length
-      ? `${formatDate(new Date(Math.min(...activities.map((item) => item.date))))}-${formatDate(new Date(Math.max(...activities.map((item) => item.date))))}, ${maxDate.getFullYear()}`
+    dateRange: cleanActivities.length
+      ? `${formatDate(new Date(Math.min(...cleanActivities.map((item) => item.date))))}-${formatDate(new Date(Math.max(...cleanActivities.map((item) => item.date))))}, ${maxDate.getFullYear()}`
       : "No dated activities",
     runMiles: Math.round(total("distance", runs) * 100) / 100,
     runHours: Math.round(total("seconds", runs) / 3600 * 100) / 100,
@@ -1276,28 +1255,324 @@ function summarizeActivities(rows) {
     last8RunHours: Math.round(total("seconds", eightWeekRuns) / 3600 * 100) / 100,
     avgRecentHr: average("avgHr", recentRuns),
     avgRecentTrainingEffect: average("trainingEffect", recentRuns),
+    avgRecentTss: average("tss", cleanActivities.filter((activity) => activity.date >= fourWeekStart)),
+    avgRecentIf: average("intensityFactor", cleanActivities.filter((activity) => activity.date >= fourWeekStart)),
+    avgRecentNp: average("normalizedPower", cleanActivities.filter((activity) => activity.date >= fourWeekStart)),
     recentPeakWeek: Math.round(Math.max(0, ...weekly.values()) * 100) / 100,
-    latestActivity: latest ? `${formatDate(latest.date)} ${latest.type}, ${latest.distance ?? "--"} mi` : "No activity",
-    lastSession: csvActivityToLastSession(latest),
-    sourceNote: "Imported in this browser session. Future HealthKit, Strava, and Garmin sync can feed this same baseline."
+    latestActivity: latest
+      ? `${formatDate(latest.date)} ${latest.type || "Training"}${latest.distance ? `, ${latest.distance} mi` : latest.seconds ? `, ${formatSeconds(latest.seconds)}` : ""}`
+      : "No activity",
+    lastSession: activityToLastSession(latest, source),
+    sourceNote
   };
 }
 
-async function importTrainingDataFile(file) {
+function summarizeActivities(rows) {
+  const activities = rows.map((row) => ({
+    type: row["Activity Type"] ?? "",
+    title: row.Title || row["Activity Type"] || "Training session",
+    date: row.Date ? new Date(row.Date.replace(" ", "T")) : null,
+    distance: parseNumber(row.Distance),
+    seconds: parseDuration(row.Time),
+    movingSeconds: parseDuration(row["Moving Time"]),
+    elapsedSeconds: parseDuration(row["Elapsed Time"]),
+    calories: parseNumber(row.Calories),
+    avgHr: parseNumber(row["Avg HR"]),
+    maxHr: parseNumber(row["Max HR"]),
+    trainingEffect: parseNumber(row["Aerobic TE"]),
+    avgCadence: parseNumber(row["Avg Run Cadence"]),
+    maxCadence: parseNumber(row["Max Run Cadence"]),
+    avgPace: row["Avg Pace"] && row["Avg Pace"] !== "--" ? row["Avg Pace"] : null,
+    bestPace: row["Best Pace"] && row["Best Pace"] !== "--" ? row["Best Pace"] : null,
+    ascent: parseNumber(row["Total Ascent"]),
+    descent: parseNumber(row["Total Descent"]),
+    strideLength: parseNumber(row["Avg Stride Length"]),
+    steps: parseNumber(row.Steps)
+  }));
+
+  return summarizeImportedActivities(
+    activities,
+    "Imported CSV",
+    "Imported in this browser session. Future HealthKit, Strava, and Garmin sync can feed this same baseline."
+  );
+}
+
+function isTrainingSessionFile(fileName) {
+  return /\.(fit|tcx|pwx)$/i.test(fileName);
+}
+
+function ensureXmlParser() {
+  if (typeof DOMParser === "undefined") {
+    throw new Error("XML workout import needs a browser parser. Open Formed in the browser and try again.");
+  }
+}
+
+function parseXmlDocument(text) {
+  ensureXmlParser();
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  const parseError = doc.getElementsByTagName("parsererror")[0];
+  if (parseError) throw new Error("That XML workout file could not be read.");
+  return doc;
+}
+
+function xmlElements(root, name) {
+  return [...root.getElementsByTagName("*")].filter((element) => element.localName?.toLowerCase() === name.toLowerCase());
+}
+
+function xmlFirst(root, names) {
+  const list = Array.isArray(names) ? names : [names];
+  for (const name of list) {
+    const match = xmlElements(root, name)[0];
+    if (match) return match;
+  }
+  return null;
+}
+
+function xmlText(root, names) {
+  return xmlFirst(root, names)?.textContent?.trim() || "";
+}
+
+function xmlNumber(root, names) {
+  return parseNutritionNumber(xmlText(root, names));
+}
+
+function xmlAttrNumber(element, names) {
+  if (!element) return null;
+  const list = Array.isArray(names) ? names : [names];
+  for (const name of list) {
+    const value = element.getAttribute(name);
+    const number = parseNutritionNumber(value);
+    if (number != null) return number;
+  }
+  return null;
+}
+
+function averageNumbers(values) {
+  const clean = values.filter((value) => value != null && Number.isFinite(value));
+  if (!clean.length) return null;
+  return Math.round(clean.reduce((sum, value) => sum + value, 0) / clean.length * 10) / 10;
+}
+
+function sessionToActivity(session) {
+  return {
+    type: session.sport || "Training",
+    title: session.title || "Training session",
+    date: session.date ? new Date(session.date) : null,
+    distance: session.distanceMiles,
+    seconds: session.durationSeconds || (session.durationMinutes ? session.durationMinutes * 60 : null),
+    movingSeconds: session.movingTimeSeconds,
+    elapsedSeconds: session.elapsedTimeSeconds,
+    calories: session.calories,
+    avgHr: session.avgHr,
+    maxHr: session.maxHr,
+    trainingEffect: session.aerobicTe,
+    tss: session.tss,
+    intensityFactor: session.intensityFactor,
+    normalizedPower: session.normalizedPower,
+    avgCadence: session.avgCadence,
+    maxCadence: session.maxCadence,
+    avgWatts: session.avgWatts,
+    ascent: session.ascent,
+    descent: session.descent,
+    notes: session.notes
+  };
+}
+
+function parseTrainingDuration(value) {
+  if (!value || value === "--") return 0;
+  const raw = String(value).trim();
+  if (raw.includes(":")) return parseDuration(raw);
+  const number = parseNutritionNumber(raw);
+  if (!number) return 0;
+  if (number <= 12) return Math.round(number * 3600);
+  if (number < 300) return Math.round(number * 60);
+  return Math.round(number);
+}
+
+function parseDistanceMiles(value, header = "") {
+  const number = parseNutritionNumber(value);
+  if (number == null) return null;
+  const normalizedHeader = normalizeCsvHeader(header);
+  const normalizedValue = String(value ?? "").toLowerCase();
+  if (normalizedHeader.includes("km") || normalizedHeader.includes("kilometer") || normalizedValue.includes(" km") || normalizedValue.includes("kilometer")) {
+    return Math.round(number * 0.621371 * 100) / 100;
+  }
+  if (normalizedHeader.includes("meter") || normalizedValue.includes(" meter")) {
+    return metersToMiles(number);
+  }
+  return Math.round(number * 100) / 100;
+}
+
+function csvValueWithHeader(row, candidates) {
+  const normalizedCandidates = candidates.map(normalizeCsvHeader).filter(Boolean);
+  for (const [key, value] of Object.entries(row)) {
+    const normalized = normalizeCsvHeader(key);
+    if (normalizedCandidates.includes(normalized) || normalizedCandidates.some((candidate) => normalized.includes(candidate))) {
+      return { value, header: key };
+    }
+  }
+  return { value: "", header: "" };
+}
+
+function looksLikeTrainingPeaksRows(rows) {
+  const headers = Object.keys(rows[0] || {});
+  if (!headers.length || looksLikeMyFitnessPalRows(rows)) return false;
+  const has = (candidates) => headers.some((header) => {
+    const normalized = normalizeCsvHeader(header);
+    return candidates.map(normalizeCsvHeader).some((candidate) => normalized.includes(candidate));
+  });
+  return has(["tss", "intensity factor", "normalized power", "workout day", "workout title", "planned duration", "completed duration", "athlete comments"]);
+}
+
+function summarizeTrainingPeaksCsv(rows) {
+  const activities = rows.map((row) => {
+    const distanceField = csvValueWithHeader(row, ["distance", "miles", "kilometers"]);
+    return {
+      type: csvValue(row, ["sport", "workout type", "type", "activity type"]) || "Training",
+      title: csvValue(row, ["title", "workout title", "name"]) || "TrainingPeaks workout",
+      date: parseFlexibleDate(csvValue(row, ["workout day", "workout date", "date", "start time", "completed date"])),
+      distance: parseDistanceMiles(distanceField.value, distanceField.header),
+      seconds: parseTrainingDuration(csvValue(row, ["duration", "completed duration", "actual duration", "time", "total time"])),
+      movingSeconds: parseTrainingDuration(csvValue(row, ["moving time", "moving duration"])),
+      elapsedSeconds: parseTrainingDuration(csvValue(row, ["elapsed time", "elapsed duration"])),
+      calories: parseNutritionNumber(csvValue(row, ["calories", "kcal"])),
+      avgHr: parseNutritionNumber(csvValue(row, ["avg hr", "average hr", "average heart rate"])),
+      maxHr: parseNutritionNumber(csvValue(row, ["max hr", "maximum hr", "max heart rate"])),
+      tss: parseNutritionNumber(csvValue(row, ["tss", "training stress score", "rtss", "hrtss", "stss"])),
+      intensityFactor: parseNutritionNumber(csvValue(row, ["if", "intensity factor"])),
+      normalizedPower: parseNutritionNumber(csvValue(row, ["np", "normalized power"])),
+      avgWatts: parseNutritionNumber(csvValue(row, ["avg power", "average power", "watts"])),
+      avgPace: csvValue(row, ["avg pace", "average pace"]) || null,
+      avgSpeedMph: parseNutritionNumber(csvValue(row, ["avg speed", "average speed"])),
+      ascent: parseNutritionNumber(csvValue(row, ["elevation gain", "total ascent", "ascent"])),
+      notes: csvValue(row, ["comments", "athlete comments", "description", "notes"])
+    };
+  });
+
+  return summarizeImportedActivities(
+    activities,
+    "TrainingPeaks CSV",
+    "Imported from TrainingPeaks summary CSV. TSS, IF, NP, HR, and comments are used when those columns are present."
+  );
+}
+
+function parseTcxSession(text, fileName) {
+  const doc = parseXmlDocument(text);
+  const activity = xmlFirst(doc, "Activity");
+  const laps = xmlElements(doc, "Lap");
+  const trackpoints = xmlElements(doc, "Trackpoint");
+  const times = trackpoints.map((point) => parseFlexibleDate(xmlText(point, "Time"))).filter(Boolean);
+  const hrValues = trackpoints.map((point) => xmlNumber(xmlFirst(point, "HeartRateBpm") || point, "Value")).filter((value) => value != null);
+  const watts = xmlElements(doc, "Watts").map((element) => parseNutritionNumber(element.textContent)).filter((value) => value != null);
+  const cadences = [
+    ...xmlElements(doc, "Cadence"),
+    ...xmlElements(doc, "RunCadence")
+  ].map((element) => parseNutritionNumber(element.textContent)).filter((value) => value != null);
+  const altitudes = trackpoints.map((point) => xmlNumber(point, "AltitudeMeters")).filter((value) => value != null);
+  let ascentMeters = 0;
+  let descentMeters = 0;
+  for (let index = 1; index < altitudes.length; index += 1) {
+    const delta = altitudes[index] - altitudes[index - 1];
+    if (delta > 0) ascentMeters += delta;
+    if (delta < 0) descentMeters += Math.abs(delta);
+  }
+  const lapDuration = laps.reduce((sum, lap) => sum + (xmlNumber(lap, "TotalTimeSeconds") || 0), 0);
+  const lapDistance = laps.reduce((sum, lap) => sum + (xmlNumber(lap, "DistanceMeters") || 0), 0);
+  const lapCalories = laps.reduce((sum, lap) => sum + (xmlNumber(lap, "Calories") || 0), 0);
+  const distanceMeters = lapDistance || xmlNumber(doc, "DistanceMeters");
+  const durationSeconds = lapDuration || (times.length > 1 ? Math.round((times.at(-1) - times[0]) / 1000) : 0);
+  const sport = activity?.getAttribute("Sport") || xmlText(doc, ["Sport", "SportType"]) || "Training";
+
+  return {
+    source: "TrainingPeaks TCX",
+    date: (parseFlexibleDate(xmlText(doc, "Id")) || times[0] || new Date()).toISOString(),
+    title: fileName.replace(/\.(tcx|xml)$/i, "") || `${sport} workout`,
+    sport,
+    distanceMiles: metersToMiles(distanceMeters),
+    durationSeconds,
+    movingTimeSeconds: durationSeconds,
+    elapsedTimeSeconds: durationSeconds,
+    calories: lapCalories || xmlNumber(doc, "Calories"),
+    avgHr: averageNumbers(hrValues.length ? hrValues : laps.map((lap) => xmlNumber(xmlFirst(lap, "AverageHeartRateBpm") || lap, "Value"))),
+    maxHr: Math.max(0, ...hrValues, ...laps.map((lap) => xmlNumber(xmlFirst(lap, "MaximumHeartRateBpm") || lap, "Value")).filter((value) => value != null)) || null,
+    avgWatts: averageNumbers(watts),
+    avgCadence: averageNumbers(cadences),
+    maxCadence: Math.max(0, ...cadences) || null,
+    ascent: metersToFeet(ascentMeters),
+    descent: metersToFeet(descentMeters),
+    notes: "Imported from TrainingPeaks-compatible TCX file."
+  };
+}
+
+function parsePwxSession(text, fileName) {
+  const doc = parseXmlDocument(text);
+  const workout = xmlFirst(doc, "workout") || doc;
+  const summary = xmlFirst(workout, "summarydata") || workout;
+  const sport = xmlText(workout, ["sportType", "sport"]) || "Training";
+  const start = parseFlexibleDate(xmlText(workout, ["time", "startTime", "date"])) || new Date();
+  const hr = xmlFirst(summary, "hr");
+  const power = xmlFirst(summary, ["pwr", "power"]);
+  const speed = xmlFirst(summary, ["spd", "speed"]);
+  const cadence = xmlFirst(summary, ["cad", "cadence"]);
+  const distance = xmlNumber(summary, ["dist", "distance"]);
+  const distanceMiles = distance != null
+    ? distance > 1000 ? metersToMiles(distance) : Math.round(distance * 0.621371 * 100) / 100
+    : null;
+
+  return {
+    source: "TrainingPeaks PWX",
+    date: start.toISOString(),
+    title: xmlText(workout, ["title", "name"]) || fileName.replace(/\.pwx$/i, "") || `${sport} workout`,
+    sport,
+    distanceMiles,
+    durationSeconds: parseTrainingDuration(xmlText(summary, "duration")),
+    movingTimeSeconds: parseTrainingDuration(xmlText(summary, "duration")),
+    elapsedTimeSeconds: parseTrainingDuration(xmlText(summary, "duration")),
+    calories: xmlNumber(summary, ["cals", "calories"]),
+    avgHr: xmlAttrNumber(hr, ["avg", "average"]) || xmlNumber(summary, ["avgHr", "averageHeartRate"]),
+    maxHr: xmlAttrNumber(hr, ["max", "maximum"]) || xmlNumber(summary, ["maxHr", "maximumHeartRate"]),
+    avgWatts: xmlAttrNumber(power, ["avg", "average"]) || xmlNumber(summary, ["avgPower", "averagePower"]),
+    normalizedPower: xmlAttrNumber(power, ["norm", "normalized"]) || xmlNumber(summary, ["np", "normalizedPower"]),
+    intensityFactor: xmlNumber(summary, ["if", "intensityFactor"]),
+    tss: xmlNumber(summary, ["tss", "trainingStressScore"]),
+    avgSpeedMph: xmlAttrNumber(speed, ["avg", "average"]),
+    avgCadence: xmlAttrNumber(cadence, ["avg", "average"]),
+    maxCadence: xmlAttrNumber(cadence, ["max", "maximum"]),
+    ascent: metersToFeet(xmlNumber(summary, ["ascent", "elevationGain"])),
+    notes: "Imported from TrainingPeaks PWX file."
+  };
+}
+
+async function readTrainingSessionFile(file) {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".fit")) {
     const parser = window.FormedFitParser;
     if (!parser?.parseFitLastSession) {
-      throw new Error("Garmin FIT importer is not available yet. Refresh and try again.");
+      throw new Error("FIT importer is not available yet. Refresh and try again.");
     }
     const session = parser.parseFitLastSession(await file.arrayBuffer(), { fileName: file.name });
+    return {
+      ...session,
+      source: "FIT workout file",
+      notes: session.notes || "Imported from FIT workout file."
+    };
+  }
+  const text = await file.text();
+  if (lowerName.endsWith(".tcx")) return parseTcxSession(text, file.name);
+  if (lowerName.endsWith(".pwx")) return parsePwxSession(text, file.name);
+  throw new Error("Unsupported workout file.");
+}
+
+async function importTrainingDataFile(file) {
+  if (isTrainingSessionFile(file.name)) {
+    const session = await readTrainingSessionFile(file);
     saveLastSession(session);
     baseline = {
       ...baseline,
       latestActivity: `${formatDate(new Date(session.date))} ${session.title}, ${formatSeconds(session.durationSeconds)}`,
-      sourceNote: "Last session imported from Garmin FIT. Run baseline remains from the latest Garmin CSV or Strava sync."
+      sourceNote: `Last session imported from ${session.source}. Run baseline remains from the latest Garmin, Strava, or TrainingPeaks history import.`
     };
-    return `Imported Garmin FIT: ${session.title}, ${formatSeconds(session.durationSeconds)}.`;
+    return `Imported ${session.source}: ${session.title}, ${formatSeconds(session.durationSeconds)}.`;
   }
 
   const text = await file.text();
@@ -1308,9 +1583,38 @@ async function importTrainingDataFile(file) {
     return `Imported MyFitnessPal fuel data for ${nutrition.dateLabel}.`;
   }
 
-  baseline = summarizeActivities(rows);
+  baseline = looksLikeTrainingPeaksRows(rows) ? summarizeTrainingPeaksCsv(rows) : summarizeActivities(rows);
   if (baseline.lastSession) saveLastSession(baseline.lastSession);
-  return "Imported Garmin/Strava CSV baseline.";
+  return looksLikeTrainingPeaksRows(rows) ? "Imported TrainingPeaks summary CSV." : "Imported Garmin/Strava CSV baseline.";
+}
+
+async function importTrainingDataFiles(files) {
+  const sessionFiles = files.filter((file) => isTrainingSessionFile(file.name));
+  const otherFiles = files.filter((file) => !isTrainingSessionFile(file.name));
+  const messages = [];
+
+  if (sessionFiles.length === 1 && files.length === 1) {
+    messages.push(await importTrainingDataFile(sessionFiles[0]));
+  } else if (sessionFiles.length) {
+    const sessions = [];
+    for (const file of sessionFiles) {
+      sessions.push(await readTrainingSessionFile(file));
+    }
+    const latest = [...sessions].sort((a, b) => sessionTimestamp(b) - sessionTimestamp(a))[0];
+    if (latest) saveLastSession(latest);
+    baseline = summarizeImportedActivities(
+      sessions.map(sessionToActivity),
+      "TrainingPeaks files",
+      `Imported ${sessions.length} completed workout files. TSS, IF, NP, HR, power, cadence, and elevation are used when present.`
+    );
+    messages.push(`Imported ${sessions.length} workout file${sessions.length === 1 ? "" : "s"} from TrainingPeaks-compatible exports.`);
+  }
+
+  for (const file of otherFiles) {
+    messages.push(await importTrainingDataFile(file));
+  }
+
+  return messages.join(" ");
 }
 
 function exportWeekCsv() {
@@ -1713,6 +2017,9 @@ function serverActivityToLastSession(activity) {
     avgHr: activity.avgHr,
     maxHr: activity.maxHr,
     avgWatts: activity.avgWatts,
+    tss: activity.tss,
+    intensityFactor: activity.intensityFactor,
+    normalizedPower: activity.normalizedPower,
     avgPace: activity.avgPace,
     avgSpeedMph: activity.avgSpeedMph,
     notes: activity.notes || "Synced from Strava."
@@ -1808,20 +2115,11 @@ function bindEvents() {
     els.eventModeInput
   ].forEach((element) => element.addEventListener("input", render));
 
-  els.resetAvailabilityButton.addEventListener("click", () => {
-    mondayOrder.forEach((day) => {
-      const input = document.querySelector(`[data-availability="${day}"]`);
-      input.value = availabilityDefaults[day];
-      input.nextElementSibling.textContent = `${availabilityDefaults[day]}m`;
-    });
-    render();
-  });
-
   els.csvInput.addEventListener("change", async (event) => {
-    const [file] = event.target.files;
-    if (!file) return;
+    const files = [...event.target.files];
+    if (!files.length) return;
     try {
-      const message = await importTrainingDataFile(file);
+      const message = await importTrainingDataFiles(files);
       render();
       els.dataNote.textContent = message;
     } catch (error) {
@@ -1846,7 +2144,6 @@ function bindEvents() {
 function init() {
   els.todayInput.value = DEFAULT_TODAY;
   els.coachNameInput.value = coachProfile.coachName || DEFAULT_COACH_NAME;
-  buildAvailabilityControls();
   renderStrengthMenu();
   bindEvents();
   render();
