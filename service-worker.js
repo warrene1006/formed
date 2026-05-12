@@ -1,8 +1,9 @@
-const CACHE_NAME = "formed-v5";
+const CACHE_NAME = "formed-v6";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./fit-parser.js",
   "./app.js",
   "./manifest.json",
   "./icon.svg"

@@ -1074,6 +1074,29 @@ function summarizeActivities(rows) {
   };
 }
 
+async function importTrainingDataFile(file) {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".fit")) {
+    const parser = window.FormedFitParser;
+    if (!parser?.parseFitLastSession) {
+      throw new Error("Garmin FIT importer is not available yet. Refresh and try again.");
+    }
+    const session = parser.parseFitLastSession(await file.arrayBuffer(), { fileName: file.name });
+    saveLastSession(session);
+    baseline = {
+      ...baseline,
+      latestActivity: `${formatDate(new Date(session.date))} ${session.title}, ${formatSeconds(session.durationSeconds)}`,
+      sourceNote: "Last session imported from Garmin FIT. Run baseline remains from the latest Garmin CSV or Strava sync."
+    };
+    return `Imported Garmin FIT: ${session.title}, ${formatSeconds(session.durationSeconds)}.`;
+  }
+
+  const text = await file.text();
+  baseline = summarizeActivities(parseCsv(text));
+  if (baseline.lastSession) saveLastSession(baseline.lastSession);
+  return "Imported Garmin/Strava CSV baseline.";
+}
+
 function exportWeekCsv() {
   const headers = ["Date", "Day", "Sport", "Workout", "Minutes", "Intensity", "Intent", "Available Minutes", "Adaptation"];
   const lines = [
@@ -1548,10 +1571,15 @@ function bindEvents() {
   els.csvInput.addEventListener("change", async (event) => {
     const [file] = event.target.files;
     if (!file) return;
-    const text = await file.text();
-    baseline = summarizeActivities(parseCsv(text));
-    if (baseline.lastSession) saveLastSession(baseline.lastSession);
-    render();
+    try {
+      const message = await importTrainingDataFile(file);
+      render();
+      els.dataNote.textContent = message;
+    } catch (error) {
+      els.dataNote.textContent = error.message || "Import failed. Try another file.";
+    } finally {
+      event.target.value = "";
+    }
   });
 
   els.exportButton.addEventListener("click", exportWeekCsv);
