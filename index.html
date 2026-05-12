@@ -12,11 +12,19 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow" id="appBrand">Formed</p>
-          <h1 id="heroTitle">Wellness coaching that bends around real life.</h1>
+        <div class="brand-banner" role="img" aria-label="Formed mountain logo">
+          <span id="appBrand">Formed</span>
         </div>
-        <div class="event-countdown" id="eventCountdown"></div>
+        <div class="topbar-side">
+          <form class="coach-quick-chat" id="coachQuickChat" aria-label="Talk with your coach">
+            <label for="topCoachInput">Talk with Elias</label>
+            <div>
+              <input id="topCoachInput" type="text" placeholder="Ask Elias about today, recovery, or schedule changes" autocomplete="off">
+              <button class="primary-button" id="topCoachButton" type="submit">Send</button>
+            </div>
+          </form>
+          <div class="event-countdown" id="eventCountdown"></div>
+        </div>
       </header>
 
       <main class="dashboard">

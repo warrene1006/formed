@@ -123,7 +123,8 @@ let lastSession = loadInitialLastSession();
 
 const els = {
   appBrand: document.querySelector("#appBrand"),
-  heroTitle: document.querySelector("#heroTitle"),
+  coachQuickChat: document.querySelector("#coachQuickChat"),
+  topCoachInput: document.querySelector("#topCoachInput"),
   todayInput: document.querySelector("#todayInput"),
   sleepInput: document.querySelector("#sleepInput"),
   hrvInput: document.querySelector("#hrvInput"),
@@ -858,7 +859,11 @@ function renderCoachIdentity() {
   const coachName = coachProfile.coachName || DEFAULT_COACH_NAME;
   document.title = APP_NAME;
   els.appBrand.textContent = APP_NAME;
-  els.heroTitle.textContent = `Wellness coaching with ${coachName}, built around real life.`;
+  const quickChatLabel = document.querySelector("label[for='topCoachInput']");
+  if (quickChatLabel) quickChatLabel.textContent = `Talk with ${coachName}`;
+  if (els.topCoachInput) {
+    els.topCoachInput.placeholder = `Ask ${coachName} about today, recovery, or schedule changes`;
+  }
   els.coachNameInput.value = coachName;
   if (els.syncStatus && !els.syncStatus.dataset.touched) {
     els.syncStatus.textContent = `Strava sync will activate after deployment settings are configured. Coach: ${coachName}.`;
@@ -1347,6 +1352,15 @@ async function askCoach() {
   renderCoachConversation();
 }
 
+function askCoachFromTop(event) {
+  event.preventDefault();
+  const prompt = els.topCoachInput.value.trim();
+  if (!prompt) return;
+  els.planPromptInput.value = prompt;
+  els.topCoachInput.value = "";
+  askCoach();
+}
+
 function localFeedbackAdaptation(workout, nextWorkout, feedback) {
   const coachName = coachProfile.coachName || DEFAULT_COACH_NAME;
   const rpe = Number(feedback.rpe);
@@ -1588,6 +1602,7 @@ function bindEvents() {
   els.resetSyncTokenButton.addEventListener("click", resetSyncToken);
   els.saveCoachButton.addEventListener("click", saveCoachProfile);
   els.coachNameInput.addEventListener("change", saveCoachProfile);
+  els.coachQuickChat.addEventListener("submit", askCoachFromTop);
   els.askCoachButton.addEventListener("click", askCoach);
   els.completeWorkoutButton.addEventListener("click", completeWorkoutWithFeedback);
   els.rpeInput.addEventListener("input", () => {

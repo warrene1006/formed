@@ -1,4 +1,4 @@
-const CACHE_NAME = "formed-v6";
+const CACHE_NAME = "formed-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,7 +6,8 @@ const ASSETS = [
   "./fit-parser.js",
   "./app.js",
   "./manifest.json",
-  "./icon.svg"
+  "./icon.svg",
+  "./assets/formed-banner.png"
 ];
 
 self.addEventListener("install", (event) => {

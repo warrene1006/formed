@@ -55,24 +55,87 @@ button {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: end;
-  padding: 20px 0 22px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.72fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: 0 0 22px;
 }
 
-.topbar h1,
 .panel h2,
 .section-heading h2 {
   margin: 0;
   letter-spacing: 0;
 }
 
-.topbar h1 {
-  max-width: 760px;
-  font-size: clamp(2rem, 4vw, 4rem);
-  line-height: 0.98;
+.brand-banner {
+  position: relative;
+  min-height: 280px;
+  border: 1px solid rgba(255, 159, 28, 0.5);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 7, 0.18), rgba(7, 9, 7, 0)),
+    url("assets/formed-banner.png") center / cover no-repeat;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.brand-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(241, 243, 232, 0.08);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.brand-banner span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.topbar-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.coach-quick-chat {
+  border: 1px solid var(--line);
+  border-top-color: rgba(114, 209, 116, 0.62);
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(114, 209, 116, 0.09), rgba(17, 22, 17, 0.95)),
+    var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.coach-quick-chat label {
+  margin-bottom: 9px;
+  color: var(--amber);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.coach-quick-chat div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.coach-quick-chat input {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #0d120d;
+  color: var(--ink);
 }
 
 .eyebrow {
@@ -86,12 +149,12 @@ button {
 
 .event-countdown {
   display: grid;
-  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .count-card {
-  min-width: 142px;
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -775,6 +838,14 @@ output {
 }
 
 @media (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  }
+
+  .brand-banner {
+    min-height: 220px;
+  }
+
   .dashboard {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -814,8 +885,16 @@ output {
     grid-template-columns: 1fr;
   }
 
+  .brand-banner {
+    min-height: 178px;
+  }
+
   .event-countdown {
-    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+  }
+
+  .coach-quick-chat div {
+    grid-template-columns: 1fr;
   }
 
   .controls-panel,
